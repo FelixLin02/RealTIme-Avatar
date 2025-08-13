@@ -7,6 +7,11 @@ import {
     headAnimationService
 } from '../services/animationService'
 import './AvatarRenderer.css'
+// 使用動態 import 避免沒有 svg 型別宣告
+const avatarFallbackUrl = new URL('/src/assets/avatar.svg', import.meta.url).href
+const SHOW_DEBUG_OVERLAY = true
+const DEBUG_OFFSET_X = -200
+const DEBUG_OFFSET_Y = -100
 
 interface AvatarContainer extends PIXI.Container {
     mouth: PIXI.Sprite
@@ -44,6 +49,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
     const avatarRef = useRef<AvatarContainer | null>(null)
     const animationRef = useRef<number | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
+    const pixiCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
     // 狀態管理
     const [isLoading, setIsLoading] = useState(true)
@@ -51,6 +57,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
     const [currentMouthShape, setCurrentMouthShape] = useState('X')
     const [currentEyeState, setCurrentEyeState] = useState('normal')
     const [loadingStatus, setLoadingStatus] = useState<'loading' | 'success' | 'error'>('loading')
+    const [useImageFallback, setUseImageFallback] = useState(false)
 
     useEffect(() => {
         if (!canvasRef.current) return
@@ -62,7 +69,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             try {
                 const app = new PIXI.Application()
                 await (app as any).init?.({
-                    view: canvasRef.current!,
+                    canvas: canvasRef.current!,
                     width: 300,
                     height: 300,
                     backgroundAlpha: 0,
@@ -73,12 +80,35 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 appRef.current = app
                     // 確保渲染迴圈啟動
                     ; (app as any).start?.()
+
+                // 若 PIXI 仍然自己創建了 canvas，改為附加在 React canvas 的父層，避免直接置換造成 React DOM 異常
+                try {
+                    const pixiCanvas: HTMLCanvasElement | undefined =
+                        (app as any).renderer?.canvas ||
+                        (app as any).renderer?.view ||
+                        (app as any).canvas ||
+                        (app as any).view
+                    if (pixiCanvas && canvasRef.current && pixiCanvas !== canvasRef.current) {
+                        pixiCanvas.className = 'avatar-canvas'
+                        pixiCanvas.style.display = 'block'
+                        pixiCanvas.width = 300
+                        pixiCanvas.height = 300
+                        const parent = canvasRef.current.parentElement
+                        if (parent) {
+                            parent.appendChild(pixiCanvas)
+                            canvasRef.current.style.display = 'none'
+                            pixiCanvasRef.current = pixiCanvas
+                                ; (window as any).__pixiCanvas = pixiCanvas
+                            console.log('已附加 PIXI 實際 canvas 到 DOM（保留 React canvas 以避免移除錯誤）')
+                        }
+                    }
+                } catch { /* noop */ }
             } catch (e) {
                 console.warn('PIXI Application init 失敗，嘗試降級參數後重試:', e)
                 try {
                     const app = new PIXI.Application()
                     await (app as any).init?.({
-                        view: canvasRef.current!,
+                        canvas: canvasRef.current!,
                         width: 300,
                         height: 300,
                         backgroundAlpha: 0,
@@ -88,34 +118,62 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                     if (destroyed) { app.destroy(true); return }
                     appRef.current = app
                         ; (app as any).start?.()
+
+                    // 降級情況同樣將 PIXI 的實際 canvas 附加到 DOM
+                    try {
+                        const pixiCanvas: HTMLCanvasElement | undefined =
+                            (app as any).renderer?.canvas ||
+                            (app as any).renderer?.view ||
+                            (app as any).canvas ||
+                            (app as any).view
+                        if (pixiCanvas && canvasRef.current && pixiCanvas !== canvasRef.current) {
+                            pixiCanvas.className = 'avatar-canvas'
+                            pixiCanvas.style.display = 'block'
+                            pixiCanvas.width = 300
+                            pixiCanvas.height = 300
+                            const parent = canvasRef.current.parentElement
+                            if (parent) {
+                                parent.appendChild(pixiCanvas)
+                                canvasRef.current.style.display = 'none'
+                                pixiCanvasRef.current = pixiCanvas
+                                    ; (window as any).__pixiCanvas = pixiCanvas
+                                console.log('已附加 PIXI 實際 canvas 到 DOM (降級)')
+                            }
+                        }
+                    } catch { /* noop */ }
                 } catch (e2) {
                     console.error('PIXI Application 降級後仍初始化失敗:', e2)
+                    // 切換為圖片備援
+                    setLoadingStatus('error')
+                    setUseImageFallback(true)
+                    setIsLoading(false)
                     return
                 }
             }
 
             const app = appRef.current!
 
-            // 開發下的可視化偵錯背景，協助確認是否有在繪製（不影響正式）
-            if ((import.meta as any).env?.DEV) {
+            // 可視化偵錯背景（預設關閉）
+            if (SHOW_DEBUG_OVERLAY) {
                 const dbg = new PIXI.Graphics()
                 dbg.beginFill(0x3399ff, 0.12)
                 dbg.drawRoundedRect(-150, -150, 300, 300, 16)
                 dbg.endFill()
-                dbg.x = app.screen.width / 2
-                dbg.y = app.screen.height / 2
+                // 往左上各位移 100px
+                dbg.x = app.screen.width / 2 + DEBUG_OFFSET_X
+                dbg.y = app.screen.height / 2 + DEBUG_OFFSET_Y
                 app.stage.addChild(dbg)
             }
             // 先建立 Avatar，立即提供可視回饋；SVG 預載改為背景進行
             const avatar = new PIXI.Container() as AvatarContainer
-            avatar.x = app.screen.width / 2
-            avatar.y = app.screen.height / 2
             app.stage.addChild(avatar)
             avatarRef.current = avatar
 
             // 建立優化後的虛擬人外觀
             createOptimizedAvatar(avatar)
-            if ((import.meta as any).env?.DEV) {
+            // 初次置中（以內容幾何中心對齊畫布中心）
+            centerAvatarByPivot(app, avatar)
+            if (SHOW_DEBUG_OVERLAY) {
                 const dot = new PIXI.Graphics()
                 dot.beginFill(0xff0000)
                 dot.drawCircle(0, 0, 4)
@@ -130,6 +188,26 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             setLoadingStatus('success')
             setTimeout(() => setIsLoading(false), 300)
 
+            // 若一定時間內仍無有效紋理，視為渲染失敗，切換圖片備援
+            setTimeout(() => {
+                if (useImageFallback) return
+                const avatar = avatarRef.current
+                if (!avatar) return
+                const mouthTex: any = avatar.mouth?.texture as any
+                const [le, re] = avatar.eyes || []
+                const leTex: any = (le as any)?.texture
+                const reTex: any = (re as any)?.texture
+                const hasValid = Boolean(
+                    (mouthTex && (mouthTex.valid || mouthTex.baseTexture?.valid)) ||
+                    (leTex && (leTex.valid || leTex.baseTexture?.valid)) ||
+                    (reTex && (reTex.valid || reTex.baseTexture?.valid))
+                )
+                if (!hasValid) {
+                    console.warn('Avatar 紋理未就緒，切換為圖片備援')
+                    setUseImageFallback(true)
+                }
+            }, 1500)
+
             // 在背景預載 SVG，完成後套用最終紋理
             preloadSVGResources()
                 .then(() => {
@@ -139,6 +217,8 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                     const [le, re] = avatarRef.current.eyes
                     updateEyeTexture(le, avatarRef.current.currentEyeState)
                     updateEyeTexture(re, avatarRef.current.currentEyeState)
+                    // 紋理就緒後再置中一次（以幾何中心為基準）
+                    centerAvatarByPivot(appRef.current!, avatarRef.current)
                 })
                 .catch(() => {
                     // 背景載入失敗也不阻塞初始回饋
@@ -156,6 +236,15 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 ; (appRef.current as any).stop?.()
                 appRef.current.destroy(true)
             }
+            // 移除我們額外附加的 PIXI canvas，避免 React 卸載時發生 DOM 不一致
+            try {
+                if (pixiCanvasRef.current && pixiCanvasRef.current.parentElement) {
+                    pixiCanvasRef.current.parentElement.removeChild(pixiCanvasRef.current)
+                }
+                if (canvasRef.current) {
+                    canvasRef.current.style.display = 'block'
+                }
+            } catch { /* noop */ }
             // 清理 SVG 載入器
             svgLoader.cleanup()
             destroyed = true
@@ -183,6 +272,22 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         }
     }
 
+    // 以內容的幾何中心對齊畫布中心
+    const centerAvatarByPivot = (app: PIXI.Application, avatar: PIXI.Container) => {
+        const b = avatar.getBounds()
+        if (!b || !isFinite(b.width) || !isFinite(b.height)) {
+            avatar.x = app.screen.width / 2 + DEBUG_OFFSET_X
+            avatar.y = app.screen.height / 2 + DEBUG_OFFSET_Y
+            return
+        }
+        const contentCenterX = b.x + b.width / 2
+        const contentCenterY = b.y + b.height / 2
+        const dx = app.screen.width / 2 + DEBUG_OFFSET_X - contentCenterX
+        const dy = app.screen.height / 2 + DEBUG_OFFSET_Y - contentCenterY
+        avatar.x += dx
+        avatar.y += dy
+    }
+
     // 處理動畫腳本
     useEffect(() => {
         if (animationScript && !isLoading) {
@@ -200,39 +305,37 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         head.endFill()
         container.addChild(head)
 
-        // 優化後的眼睛系統
+        // 優化後的眼睛系統（先設定貼圖，再設定尺寸，避免 scale 非法）
         const leftEye = new PIXI.Sprite()
+        leftEye.anchor.set(0.5)
+        updateEyeTexture(leftEye, 'normal')
         leftEye.x = -35
         leftEye.y = -30
         leftEye.width = 28
         leftEye.height = 28
-        leftEye.anchor.set(0.5)
         leftEye.tint = 0x333333
         container.addChild(leftEye)
 
         const rightEye = new PIXI.Sprite()
+        rightEye.anchor.set(0.5)
+        updateEyeTexture(rightEye, 'normal')
         rightEye.x = 35
         rightEye.y = -30
         rightEye.width = 28
         rightEye.height = 28
-        rightEye.anchor.set(0.5)
         rightEye.tint = 0x333333
         container.addChild(rightEye)
 
-        // 優化後的嘴巴系統
+        // 優化後的嘴巴系統（先設定貼圖，再設定尺寸，避免 scale 非法）
         const mouth = new PIXI.Sprite()
+        mouth.anchor.set(0.5)
+        updateMouthTexture(mouth, 'X')
         mouth.x = 0
         mouth.y = 20
         mouth.width = 60
         mouth.height = 40
-        mouth.anchor.set(0.5)
         mouth.tint = 0x7a3b2e
         container.addChild(mouth)
-
-        // 設置初始紋理
-        updateMouthTexture(mouth, 'X')
-        updateEyeTexture(leftEye, 'normal')
-        updateEyeTexture(rightEye, 'normal')
 
         // 儲存參考以便後續動畫
         container.mouth = mouth
@@ -273,6 +376,13 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 blink()
             }
 
+            // 每幀校正位置（以幾何中心精準對齊）
+            const app = appRef.current
+            const avatar = avatarRef.current
+            if (app && avatar) {
+                centerAvatarByPivot(app, avatar)
+            }
+
             animationRef.current = requestAnimationFrame(animate)
         }
 
@@ -303,9 +413,19 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
 
         // 播放音訊（若提供）
         if (audioUrl) {
-            const audio = new Audio(audioUrl)
+            const audio = new Audio()
+                // 允許跨來源播放，避免某些瀏覽器的限制
+                ; (audio as any).crossOrigin = 'anonymous'
+                ; (audio as any).playsInline = true
+            audio.src = audioUrl
             audioRef.current = audio
-            audio.play()
+            // 盡量在使用者互動後觸發的同一循環內播放；若被瀏覽器阻擋，記錄原因
+            audio.play().catch((err) => {
+                console.warn('音訊播放被阻擋或失敗，將僅顯示嘴型動畫。', err)
+            })
+            audio.addEventListener('error', () => {
+                console.warn('音訊資源載入失敗：', audio.error)
+            })
         }
 
         // 開始說話動畫
@@ -410,40 +530,52 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
 
     return (
         <div style={{ position: 'relative', width: 300, height: 300 }}>
-            <canvas
-                ref={canvasRef}
-                className="avatar-canvas"
-                width={300}
-                height={300}
-                style={{ display: 'block' }}
-            />
-            {isLoading && (
-                <div className={`avatar-loading ${loadingStatus}`} style={{
-                    position: 'absolute',
-                    inset: 0
-                }}>
-                    <div className="status-indicator">
-                        <div className="status-dot"></div>
-                        <div className="loading-text">
-                            {loadingStatus === 'loading' && '載入中...'}
-                            {loadingStatus === 'success' && '載入完成！'}
-                            {loadingStatus === 'error' && '載入失敗'}
+            {useImageFallback ? (
+                <img
+                    src={avatarFallbackUrl}
+                    alt="avatar"
+                    width={300}
+                    height={300}
+                    style={{ display: 'block', width: 300, height: 300 }}
+                />
+            ) : (
+                <>
+                    <canvas
+                        ref={canvasRef}
+                        className="avatar-canvas"
+                        width={300}
+                        height={300}
+                        style={{ display: 'block' }}
+                    />
+                    {isLoading && (
+                        <div className={`avatar-loading ${loadingStatus}`} style={{
+                            position: 'absolute',
+                            inset: 0
+                        }}>
+                            <div className="status-indicator">
+                                <div className="status-dot"></div>
+                                <div className="loading-text">
+                                    {loadingStatus === 'loading' && '載入中...'}
+                                    {loadingStatus === 'success' && '載入完成！'}
+                                    {loadingStatus === 'error' && '載入失敗'}
+                                </div>
+                            </div>
+
+                            <div className="progress-container">
+                                <div
+                                    className="progress-bar"
+                                    style={{ width: `${loadingProgress * 100}%` }}
+                                />
+                            </div>
+
+                            <div className="progress-text">
+                                {loadingStatus === 'loading' && `${Math.round(loadingProgress * 100)}%`}
+                                {loadingStatus === 'success' && '虛擬人準備就緒'}
+                                {loadingStatus === 'error' && '請重新整理頁面'}
+                            </div>
                         </div>
-                    </div>
-
-                    <div className="progress-container">
-                        <div
-                            className="progress-bar"
-                            style={{ width: `${loadingProgress * 100}%` }}
-                        />
-                    </div>
-
-                    <div className="progress-text">
-                        {loadingStatus === 'loading' && `${Math.round(loadingProgress * 100)}%`}
-                        {loadingStatus === 'success' && '虛擬人準備就緒'}
-                        {loadingStatus === 'error' && '請重新整理頁面'}
-                    </div>
-                </div>
+                    )}
+                </>
             )}
         </div>
     )

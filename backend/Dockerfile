@@ -8,15 +8,32 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
+    git \
     build-essential \
+    pkg-config \
+    libasound2-dev \
+    libboost-all-dev \
+    openjdk-17-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
 
-# 安裝 Rhubarb Lip Sync
-RUN wget -O rhubarb-linux-x86_64.tar.gz \
-    https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.13.0/rhubarb-linux-x86_64.tar.gz \
-    && tar -xzf rhubarb-linux-x86_64.tar.gz \
-    && mv rhubarb /usr/local/bin/ \
-    && rm rhubarb-linux-x86_64.tar.gz
+# 安裝較新版 CMake（解決 CMP0167 等政策問題）
+RUN pip install --no-cache-dir "cmake>=3.28"
+
+# 建置並安裝 Rhubarb Lip Sync（從原始碼）
+RUN git clone https://github.com/DanielSWolf/rhubarb-lip-sync.git /tmp/rhubarb \
+    && cd /tmp/rhubarb \
+    && mkdir build \
+    && cd build \
+    && /usr/local/bin/cmake .. \
+    && make -j"$(nproc)" \
+    && find . -maxdepth 3 -type f -name rhubarb -exec cp {} /usr/local/bin/ \; \
+    && cd / \
+    && rm -rf /tmp/rhubarb
+
+# 設定 rhubarb 執行路徑
+ENV RHUBARB_PATH=/usr/local/bin/rhubarb
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH="$JAVA_HOME/bin:${PATH}"
 
 # 複製依賴檔案
 COPY requirements.txt .

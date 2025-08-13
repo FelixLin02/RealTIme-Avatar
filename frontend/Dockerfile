@@ -7,8 +7,8 @@ WORKDIR /app
 # 複製 package.json 和 package-lock.json
 COPY package*.json ./
 
-# 安裝依賴
-RUN npm ci --only=production
+# 安裝依賴（需要 devDependencies 以建置 Vite）
+RUN npm ci
 
 # 複製原始碼
 COPY . .

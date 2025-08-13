@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.core.config import settings
@@ -20,6 +21,9 @@ app.add_middleware(
 
 # 註冊路由
 app.include_router(router, prefix="/api/v1")
+
+# 提供本地儲存音訊的靜態檔案服務（對應 StorageService 的本地 URL /static/audio）
+app.mount("/static/audio", StaticFiles(directory="uploads"), name="audio")
 
 @app.get("/")
 async def root():
