@@ -69,7 +69,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             try {
                 const app = new PIXI.Application()
                 await (app as any).init?.({
-                    canvas: canvasRef.current!,
+                    view: canvasRef.current!,
                     width: 300,
                     height: 300,
                     backgroundAlpha: 0,
@@ -80,6 +80,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 appRef.current = app
                     // 確保渲染迴圈啟動
                     ; (app as any).start?.()
+                    ; (app as any).renderer?.resize?.(300, 300)
 
                 // 若 PIXI 仍然自己創建了 canvas，改為附加在 React canvas 的父層，避免直接置換造成 React DOM 異常
                 try {
@@ -108,7 +109,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 try {
                     const app = new PIXI.Application()
                     await (app as any).init?.({
-                        canvas: canvasRef.current!,
+                        view: canvasRef.current!,
                         width: 300,
                         height: 300,
                         backgroundAlpha: 0,
@@ -118,6 +119,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                     if (destroyed) { app.destroy(true); return }
                     appRef.current = app
                         ; (app as any).start?.()
+                        ; (app as any).renderer?.resize?.(300, 300)
 
                     // 降級情況同樣將 PIXI 的實際 canvas 附加到 DOM
                     try {
@@ -176,6 +178,9 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             createOptimizedAvatar(avatar)
             // 初次置中（以內容幾何中心對齊畫布中心）
             centerAvatarByPivot(app, avatar)
+            // 視窗縮放時重新置中
+            const onResize = () => centerAvatarByPivot(app, avatar)
+            window.addEventListener('resize', onResize)
             if (SHOW_DEBUG_OVERLAY) {
                 const dot = new PIXI.Graphics()
                 dot.beginFill(0xff0000)
@@ -215,11 +220,22 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             preloadSVGResources()
                 .then(() => {
                     if (!avatarRef.current) return
-                    // 套用最新紋理
-                    updateMouthTexture(avatarRef.current.mouth, avatarRef.current.currentMouthShape)
-                    const [le, re] = avatarRef.current.eyes
-                    updateEyeTexture(le, avatarRef.current.currentEyeState)
-                    updateEyeTexture(re, avatarRef.current.currentEyeState)
+                    // 套用最新紋理（此時一定要拿真實紋理）
+                    const mTex2 = svgLoader.getTexture('soft-smile') || svgLoader.getTexture('X')
+                    if (mTex2) {
+                        avatarRef.current.mouth.texture = mTex2
+                        avatarRef.current.mouth.visible = true
+                    }
+                    const le2 = svgLoader.getTexture('normal')
+                    const re2 = svgLoader.getTexture('normal')
+                    if (le2) {
+                        avatarRef.current.eyes[0].texture = le2
+                        avatarRef.current.eyes[0].visible = true
+                    }
+                    if (re2) {
+                        avatarRef.current.eyes[1].texture = re2
+                        avatarRef.current.eyes[1].visible = true
+                    }
                     // 紋理就緒後再置中一次（以幾何中心為基準）
                     centerAvatarByPivot(appRef.current!, avatarRef.current)
                 })
@@ -239,6 +255,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 ; (appRef.current as any).stop?.()
                 appRef.current.destroy(true)
             }
+            window.removeEventListener('resize', () => { })
             // 移除我們額外附加的 PIXI canvas，避免 React 卸載時發生 DOM 不一致
             try {
                 if (pixiCanvasRef.current && pixiCanvasRef.current.parentElement) {
@@ -322,7 +339,10 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         // 優化後的眼睛系統（先設定貼圖，再設定尺寸，避免 scale 非法）
         const leftEye = new PIXI.Sprite()
         leftEye.anchor.set(0.5)
-        updateEyeTexture(leftEye, 'normal')
+        // 僅在有真實紋理時才套用；否則先保持不可見，避免幾何備援
+        const leTex = svgLoader.getTexture('normal')
+        if (leTex) leftEye.texture = leTex
+        leftEye.visible = Boolean(leTex)
         leftEye.x = -30
         leftEye.y = -25
         leftEye.width = 24
@@ -332,7 +352,9 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
 
         const rightEye = new PIXI.Sprite()
         rightEye.anchor.set(0.5)
-        updateEyeTexture(rightEye, 'normal')
+        const reTex = svgLoader.getTexture('normal')
+        if (reTex) rightEye.texture = reTex
+        rightEye.visible = Boolean(reTex)
         rightEye.x = 30
         rightEye.y = -25
         rightEye.width = 24
@@ -343,7 +365,9 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         // 優化後的嘴巴系統（先設定貼圖，再設定尺寸，避免 scale 非法）
         const mouth = new PIXI.Sprite()
         mouth.anchor.set(0.5)
-        updateMouthTexture(mouth, 'X')
+        const mTex = svgLoader.getTexture('soft-smile') || svgLoader.getTexture('X')
+        if (mTex) mouth.texture = mTex
+        mouth.visible = Boolean(mTex)
         mouth.x = 0
         mouth.y = 25
         mouth.width = 50

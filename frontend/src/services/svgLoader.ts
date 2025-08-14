@@ -21,29 +21,32 @@ export interface SVGResource {
 
 // 嘴型資源配置（優先使用 mouth-shapes，更豐富；X 保留 variants 的 closed）
 export const MOUTH_SHAPES_CONFIG: { [key: string]: SVGResource } = {
-    'X': { id: 'closed', path: '../assets/mouth-variants/avatar-mouth-closed.svg', loaded: false },
-    'A': { id: 'slightly-open-A', path: '../assets/mouth-shapes/slightly-open-A.svg', loaded: false },
-    'B': { id: 'half-open', path: '../assets/mouth-shapes/half-open-E.svg', loaded: false },
-    'C': { id: 'tight', path: '../assets/mouth-shapes/mouth-tight.svg', loaded: false },
-    'D': { id: 'sibilant', path: '../assets/mouth-shapes/mouth-sibilant.svg', loaded: false },
-    'E': { id: 'half-open-E', path: '../assets/mouth-shapes/half-open-E.svg', loaded: false },
-    'F': { id: 'smile', path: '../assets/mouth-shapes/smile_happy.svg', loaded: false },
-    'G': { id: 'wide-open', path: '../assets/mouth-shapes/wide-open.svg', loaded: false },
-    'H': { id: 'round-O', path: '../assets/mouth-shapes/round-O.svg', loaded: false }
+    // 以提供的新素材為主：預設展示 soft-smile
+    'soft-smile': { id: 'soft-smile', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    // 其他鍵保留，必要時可映射到最接近的形狀
+    'X': { id: 'soft-smile-as-X', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    'A': { id: 'soft-smile-as-A', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    'B': { id: 'soft-smile-as-B', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    'C': { id: 'soft-smile-as-C', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    'D': { id: 'soft-smile-as-D', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    'E': { id: 'soft-smile-as-E', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    'F': { id: 'soft-smile-as-F', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    'G': { id: 'soft-smile-as-G', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    'H': { id: 'soft-smile-as-H', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false }
 }
 
 // 眼睛資源配置
 export const EYE_SHAPES_CONFIG: { [key: string]: SVGResource } = {
-    'normal': { id: 'eyes-normal', path: '../assets/eyes/eyes_blink_close.svg', loaded: false },
-    'blink': { id: 'eyes-blink', path: '../assets/eyes/eyes_blink_close.svg', loaded: false },
-    'happy': { id: 'eyes-happy', path: '../assets/eyes/eyes_blink_close.svg', loaded: false },
-    'sad': { id: 'eyes-sad', path: '../assets/eyes/eyes-blink_sad.svg', loaded: false }
+    'normal': { id: 'eyes-open', path: '../assets/Avatar-eyes-open.svg', loaded: false },
+    'blink': { id: 'eyes-closed', path: '../assets/eyes/Avatar-eyes-closed.svg', loaded: false },
+    'happy': { id: 'eyes-open-happy', path: '../assets/Avatar-eyes-open.svg', loaded: false },
+    'sad': { id: 'eyes-closed-sad', path: '../assets/eyes/Avatar-eyes-closed.svg', loaded: false }
 }
 
 // 頭部資源（用於 300x300 置中顯示）
 export const HEAD_RESOURCE: SVGResource = {
     id: 'head',
-    path: '../assets/avatar.svg',
+    path: '../assets/Avatar-Base.svg',
     loaded: false
 }
 
@@ -112,11 +115,7 @@ export class SVGLoader {
     public getTexture(key: string): PIXI.Texture | undefined {
         const resource = this.resources.get(key)
         if (!resource) return undefined
-        if (!resource.texture) {
-            // 提供即時備援，避免畫面因等待載入而沒有任何可視回饋
-            resource.texture = this.createFallbackTexture(key)
-            resource.loaded = true
-        }
+        // 改為僅在真正載入成功時回傳紋理；未載入時不再使用幾何備援，避免出現幾何眼/圓形
         return resource.texture
     }
 
