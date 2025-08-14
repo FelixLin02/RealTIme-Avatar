@@ -37,10 +37,10 @@ export const MOUTH_SHAPES_CONFIG: { [key: string]: SVGResource } = {
 
 // 眼睛資源配置
 export const EYE_SHAPES_CONFIG: { [key: string]: SVGResource } = {
-    'normal': { id: 'eyes-open', path: '../assets/Avatar-eyes-open.svg', loaded: false },
+    'normal': { id: 'eyes-open', path: '../assets/eyes/Avatar-eyes-open.svg', loaded: false },
     'blink': { id: 'eyes-closed', path: '../assets/eyes/Avatar-eyes-closed.svg', loaded: false },
-    'happy': { id: 'eyes-open-happy', path: '../assets/Avatar-eyes-open.svg', loaded: false },
-    'sad': { id: 'eyes-closed-sad', path: '../assets/eyes/Avatar-eyes-closed.svg', loaded: false }
+    'look-left': { id: 'eyes-look-left', path: '../assets/eyes/Avatar-eyes-look-left.svg', loaded: false },
+    'look-right': { id: 'eyes-look-right', path: '../assets/eyes/Avatar-eyes-look-right.svg', loaded: false }
 }
 
 // 頭部資源（用於 300x300 置中顯示）

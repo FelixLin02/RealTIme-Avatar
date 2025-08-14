@@ -10,6 +10,7 @@ import './AvatarRenderer.css'
 // 使用動態 import 避免沒有 svg 型別宣告
 const avatarFallbackUrl = new URL('/src/assets/avatar.svg', import.meta.url).href
 const SHOW_DEBUG_OVERLAY = false
+const HIDE_HEAD_BASE = true
 const DEBUG_OFFSET_X = 0
 const DEBUG_OFFSET_Y = 0
 
@@ -224,17 +225,16 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                     const mTex2 = svgLoader.getTexture('soft-smile') || svgLoader.getTexture('X')
                     if (mTex2) {
                         avatarRef.current.mouth.texture = mTex2
-                        avatarRef.current.mouth.visible = true
+                        Object.assign(avatarRef.current.mouth, { visible: true, width: 300, height: 300, x: 0, y: 0 })
                     }
-                    const le2 = svgLoader.getTexture('normal')
-                    const re2 = svgLoader.getTexture('normal')
-                    if (le2) {
-                        avatarRef.current.eyes[0].texture = le2
+                    const eyesTex2 = svgLoader.getTexture('normal')
+                    if (eyesTex2) {
+                        avatarRef.current.eyes[0].texture = eyesTex2
                         avatarRef.current.eyes[0].visible = true
-                    }
-                    if (re2) {
-                        avatarRef.current.eyes[1].texture = re2
-                        avatarRef.current.eyes[1].visible = true
+                        avatarRef.current.eyes[0].width = 300
+                        avatarRef.current.eyes[0].height = 300
+                        avatarRef.current.eyes[0].x = 0
+                        avatarRef.current.eyes[0].y = 0
                     }
                     // 紋理就緒後再置中一次（以幾何中心為基準）
                     centerAvatarByPivot(appRef.current!, avatarRef.current)
@@ -322,10 +322,11 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         if (headTexture) {
             const headSprite = new PIXI.Sprite(headTexture)
             headSprite.anchor.set(0.5)
-            // 以 cover 模式縮放至 300x300，保持比例置中
             fitSpriteIntoSquare(headSprite, 300, 'cover')
             headSprite.x = 0
             headSprite.y = 0
+            // 僅隱藏系統幾何頭，不隱藏你的 Avatar-Base.svg
+            headSprite.visible = true
             container.addChild(headSprite)
         } else {
             const head = new PIXI.Graphics()
@@ -333,51 +334,38 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             head.lineStyle(2, 0x8a5a44, 1)
             head.drawCircle(0, -10, 100)
             head.endFill()
+            // 系統幾何頭永遠隱藏（等待 Avatar-Base.svg 載入顯示）
+            head.visible = false
             container.addChild(head)
         }
 
-        // 優化後的眼睛系統（先設定貼圖，再設定尺寸，避免 scale 非法）
-        const leftEye = new PIXI.Sprite()
-        leftEye.anchor.set(0.5)
-        // 僅在有真實紋理時才套用；否則先保持不可見，避免幾何備援
-        const leTex = svgLoader.getTexture('normal')
-        if (leTex) leftEye.texture = leTex
-        leftEye.visible = Boolean(leTex)
-        leftEye.x = -30
-        leftEye.y = -25
-        leftEye.width = 24
-        leftEye.height = 24
-        leftEye.tint = 0x333333
-        container.addChild(leftEye)
+        // 眼睛改為「單一 300x300 全畫布」的貼圖，與 Avatar-Base.svg 對位
+        const eyesSprite = new PIXI.Sprite()
+        eyesSprite.anchor.set(0.5)
+        const eyesTex = svgLoader.getTexture('normal')
+        if (eyesTex) eyesSprite.texture = eyesTex
+        eyesSprite.visible = Boolean(eyesTex)
+        eyesSprite.x = 0
+        eyesSprite.y = 0
+        eyesSprite.width = 300
+        eyesSprite.height = 300
+        container.addChild(eyesSprite)
 
-        const rightEye = new PIXI.Sprite()
-        rightEye.anchor.set(0.5)
-        const reTex = svgLoader.getTexture('normal')
-        if (reTex) rightEye.texture = reTex
-        rightEye.visible = Boolean(reTex)
-        rightEye.x = 30
-        rightEye.y = -25
-        rightEye.width = 24
-        rightEye.height = 24
-        rightEye.tint = 0x333333
-        container.addChild(rightEye)
-
-        // 優化後的嘴巴系統（先設定貼圖，再設定尺寸，避免 scale 非法）
+        // 嘴巴改為與 Base 同畫布的 300x300 貼圖
         const mouth = new PIXI.Sprite()
         mouth.anchor.set(0.5)
         const mTex = svgLoader.getTexture('soft-smile') || svgLoader.getTexture('X')
         if (mTex) mouth.texture = mTex
         mouth.visible = Boolean(mTex)
         mouth.x = 0
-        mouth.y = 25
-        mouth.width = 50
-        mouth.height = 30
-        mouth.tint = 0x7a3b2e
+        mouth.y = 0
+        mouth.width = 300
+        mouth.height = 300
         container.addChild(mouth)
 
         // 儲存參考以便後續動畫
         container.mouth = mouth
-        container.eyes = [leftEye, rightEye]
+        container.eyes = [eyesSprite]
         container.currentMouthShape = 'X'
         container.currentEyeState = 'normal'
     }
@@ -412,16 +400,27 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         if (!avatarRef.current) return
 
         let time = 0
+        let gazeTimer = 0
         const animate = () => {
             time += 0.016 // 約 60fps
+            gazeTimer += 0.016
 
             // 呼吸動畫
             const breathScale = 1 + Math.sin(time * 0.5) * 0.02
             avatarRef.current!.scale.set(breathScale)
 
-            // 優化後的眨眼動畫
+            // 眨眼動畫
             if (Math.random() < 0.008) { // 降低眨眼頻率，更自然
                 blink()
+            }
+
+            // 每 2.5~4 秒隨機換一次眼神方向（left/right/open）
+            if (gazeTimer > 2.5 + Math.random() * 1.5) {
+                gazeTimer = 0
+                const eye = avatarRef.current!.eyes[0]
+                const states = ['normal', 'look-left', 'look-right']
+                const next = states[Math.floor(Math.random() * states.length)]
+                updateEyeTexture(eye, next)
             }
 
             // 每幀校正位置（以幾何中心精準對齊）
@@ -441,14 +440,11 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         if (!avatarRef.current?.eyes) return
 
         const eyes = avatarRef.current.eyes as PIXI.Sprite[]
-
-        // 使用動畫服務執行眨眼
-        eyes.forEach(eye => {
-            eyeAnimationService.animateBlink(eye, 250, () => {
-                // 眨眼完成後恢復正常狀態
-                updateEyeTexture(eye, 'normal')
-            })
-        })
+        const eye = eyes[0]
+        updateEyeTexture(eye, 'blink')
+        setTimeout(() => {
+            updateEyeTexture(eye, 'normal')
+        }, 120)
     }
 
     const startTalkingAnimation = (script: AnimationScript, audioUrl: string) => {
