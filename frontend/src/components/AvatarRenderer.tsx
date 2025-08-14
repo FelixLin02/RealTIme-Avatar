@@ -9,9 +9,9 @@ import {
 import './AvatarRenderer.css'
 // 使用動態 import 避免沒有 svg 型別宣告
 const avatarFallbackUrl = new URL('/src/assets/avatar.svg', import.meta.url).href
-const SHOW_DEBUG_OVERLAY = true
-const DEBUG_OFFSET_X = -200
-const DEBUG_OFFSET_Y = -100
+const SHOW_DEBUG_OVERLAY = false
+const DEBUG_OFFSET_X = 0
+const DEBUG_OFFSET_Y = 0
 
 interface AvatarContainer extends PIXI.Container {
     mouth: PIXI.Sprite
@@ -164,12 +164,15 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 dbg.y = app.screen.height / 2 + DEBUG_OFFSET_Y
                 app.stage.addChild(dbg)
             }
-            // 先建立 Avatar，立即提供可視回饋；SVG 預載改為背景進行
+            // 先建立 Avatar，立即提供可視回饋；在建立前先載入 head 紋理，確保優先使用 @assets/avatar.svg
             const avatar = new PIXI.Container() as AvatarContainer
             app.stage.addChild(avatar)
             avatarRef.current = avatar
 
             // 建立優化後的虛擬人外觀
+            try {
+                await svgLoader.loadResource('head')
+            } catch { }
             createOptimizedAvatar(avatar)
             // 初次置中（以內容幾何中心對齊畫布中心）
             centerAvatarByPivot(app, avatar)
@@ -297,32 +300,43 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
     }, [animationScript, audioUrl, isLoading])
 
     const createOptimizedAvatar = (container: AvatarContainer) => {
-        // 頭部（先用簡單圖形，等資源預載完成後再換成 avatar-head.svg）
-        const head = new PIXI.Graphics()
-        head.beginFill(0xffcba0)
-        head.lineStyle(2, 0x8a5a44, 1)
-        head.drawCircle(0, -10, 100)
-        head.endFill()
-        container.addChild(head)
+        // 頭部：若有 head 紋理則優先使用並填滿 300x300，否則退回簡單圖形
+        const headTexture = svgLoader.getTexture('head')
+        if (headTexture) {
+            const headSprite = new PIXI.Sprite(headTexture)
+            headSprite.anchor.set(0.5)
+            // 以 cover 模式縮放至 300x300，保持比例置中
+            fitSpriteIntoSquare(headSprite, 300, 'cover')
+            headSprite.x = 0
+            headSprite.y = 0
+            container.addChild(headSprite)
+        } else {
+            const head = new PIXI.Graphics()
+            head.beginFill(0xffcba0)
+            head.lineStyle(2, 0x8a5a44, 1)
+            head.drawCircle(0, -10, 100)
+            head.endFill()
+            container.addChild(head)
+        }
 
         // 優化後的眼睛系統（先設定貼圖，再設定尺寸，避免 scale 非法）
         const leftEye = new PIXI.Sprite()
         leftEye.anchor.set(0.5)
         updateEyeTexture(leftEye, 'normal')
-        leftEye.x = -35
-        leftEye.y = -30
-        leftEye.width = 28
-        leftEye.height = 28
+        leftEye.x = -30
+        leftEye.y = -25
+        leftEye.width = 24
+        leftEye.height = 24
         leftEye.tint = 0x333333
         container.addChild(leftEye)
 
         const rightEye = new PIXI.Sprite()
         rightEye.anchor.set(0.5)
         updateEyeTexture(rightEye, 'normal')
-        rightEye.x = 35
-        rightEye.y = -30
-        rightEye.width = 28
-        rightEye.height = 28
+        rightEye.x = 30
+        rightEye.y = -25
+        rightEye.width = 24
+        rightEye.height = 24
         rightEye.tint = 0x333333
         container.addChild(rightEye)
 
@@ -331,9 +345,9 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         mouth.anchor.set(0.5)
         updateMouthTexture(mouth, 'X')
         mouth.x = 0
-        mouth.y = 20
-        mouth.width = 60
-        mouth.height = 40
+        mouth.y = 25
+        mouth.width = 50
+        mouth.height = 30
         mouth.tint = 0x7a3b2e
         container.addChild(mouth)
 
@@ -342,6 +356,16 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         container.eyes = [leftEye, rightEye]
         container.currentMouthShape = 'X'
         container.currentEyeState = 'normal'
+    }
+
+    // 將任意貼圖以 cover/contain 模式縮放至方形尺寸
+    const fitSpriteIntoSquare = (sprite: PIXI.Sprite, size: number, mode: 'cover' | 'contain' = 'cover') => {
+        const tex = sprite.texture
+        const w = (tex as any)?.width || tex.baseTexture?.realWidth || tex.baseTexture?.width
+        const h = (tex as any)?.height || tex.baseTexture?.realHeight || tex.baseTexture?.height
+        if (!w || !h) return
+        const scale = mode === 'cover' ? Math.max(size / w, size / h) : Math.min(size / w, size / h)
+        sprite.scale.set(scale)
     }
 
     // 更新嘴型紋理

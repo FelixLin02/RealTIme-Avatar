@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libasound2-dev \
     libboost-all-dev \
-    openjdk-17-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # 安裝較新版 CMake（解決 CMP0167 等政策問題）
@@ -25,15 +24,13 @@ RUN git clone https://github.com/DanielSWolf/rhubarb-lip-sync.git /tmp/rhubarb \
     && mkdir build \
     && cd build \
     && /usr/local/bin/cmake .. \
-    && make -j"$(nproc)" \
-    && find . -maxdepth 3 -type f -name rhubarb -exec cp {} /usr/local/bin/ \; \
+    && /usr/local/bin/cmake --build . --target rhubarb -j"$(nproc)" \
+    && find . -maxdepth 5 -type f -name rhubarb -exec cp {} /usr/local/bin/ \; \
     && cd / \
     && rm -rf /tmp/rhubarb
 
 # 設定 rhubarb 執行路徑
 ENV RHUBARB_PATH=/usr/local/bin/rhubarb
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-ENV PATH="$JAVA_HOME/bin:${PATH}"
 
 # 複製依賴檔案
 COPY requirements.txt .

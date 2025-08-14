@@ -4,7 +4,7 @@ import * as PIXI from 'pixi.js'
 // Key 會是相對於本檔案的路徑，例如 '../assets/mouth-shapes/mouth-close.svg'
 // Value 會是可直接請求的 URL（開發時為本機伺服器 URL，打包時為指向資產的 URL）
 const ASSET_URL_MAP: Record<string, string> = {
-    ...import.meta.glob('../assets/**/*.svg', { eager: true, as: 'url' }) as Record<string, string>
+    ...((import.meta as any).glob('../assets/**/*.svg', { eager: true, as: 'url' }) as Record<string, string>)
 }
 
 function resolveAssetUrl(relativePathFromHere: string): string | undefined {
@@ -19,25 +19,32 @@ export interface SVGResource {
     loaded: boolean
 }
 
-// 嘴型資源配置
+// 嘴型資源配置（優先使用 mouth-shapes，更豐富；X 保留 variants 的 closed）
 export const MOUTH_SHAPES_CONFIG: { [key: string]: SVGResource } = {
-    // Phase-1 測試：以 mouth-variants 為主（僅三檔）。其餘形狀映射到最接近者。
     'X': { id: 'closed', path: '../assets/mouth-variants/avatar-mouth-closed.svg', loaded: false },
-    'C': { id: 'slightly-open', path: '../assets/mouth-variants/avatar-mouth-slightly-open.svg', loaded: false },
-    'D': { id: 'slightly-open', path: '../assets/mouth-variants/avatar-mouth-slightly-open.svg', loaded: false },
-    'E': { id: 'slightly-open', path: '../assets/mouth-variants/avatar-mouth-slightly-open.svg', loaded: false },
-    'B': { id: 'half-open', path: '../assets/mouth-variants/avatar-mouth-half-open.svg', loaded: false },
-    'A': { id: 'half-open', path: '../assets/mouth-variants/avatar-mouth-half-open.svg', loaded: false },
-    'F': { id: 'half-open', path: '../assets/mouth-variants/avatar-mouth-half-open.svg', loaded: false },
-    'G': { id: 'half-open', path: '../assets/mouth-variants/avatar-mouth-half-open.svg', loaded: false },
-    'H': { id: 'half-open', path: '../assets/mouth-variants/avatar-mouth-half-open.svg', loaded: false }
+    'A': { id: 'slightly-open-A', path: '../assets/mouth-shapes/slightly-open-A.svg', loaded: false },
+    'B': { id: 'half-open', path: '../assets/mouth-shapes/half-open-E.svg', loaded: false },
+    'C': { id: 'tight', path: '../assets/mouth-shapes/mouth-tight.svg', loaded: false },
+    'D': { id: 'sibilant', path: '../assets/mouth-shapes/mouth-sibilant.svg', loaded: false },
+    'E': { id: 'half-open-E', path: '../assets/mouth-shapes/half-open-E.svg', loaded: false },
+    'F': { id: 'smile', path: '../assets/mouth-shapes/smile_happy.svg', loaded: false },
+    'G': { id: 'wide-open', path: '../assets/mouth-shapes/wide-open.svg', loaded: false },
+    'H': { id: 'round-O', path: '../assets/mouth-shapes/round-O.svg', loaded: false }
 }
 
 // 眼睛資源配置
 export const EYE_SHAPES_CONFIG: { [key: string]: SVGResource } = {
     'normal': { id: 'eyes-normal', path: '../assets/eyes/eyes_blink_close.svg', loaded: false },
     'blink': { id: 'eyes-blink', path: '../assets/eyes/eyes_blink_close.svg', loaded: false },
-    'happy': { id: 'eyes-happy', path: '../assets/eyes/eyes-blink_sad.svg', loaded: false }
+    'happy': { id: 'eyes-happy', path: '../assets/eyes/eyes_blink_close.svg', loaded: false },
+    'sad': { id: 'eyes-sad', path: '../assets/eyes/eyes-blink_sad.svg', loaded: false }
+}
+
+// 頭部資源（用於 300x300 置中顯示）
+export const HEAD_RESOURCE: SVGResource = {
+    id: 'head',
+    path: '../assets/avatar.svg',
+    loaded: false
 }
 
 // SVG 載入器類別
@@ -54,6 +61,8 @@ export class SVGLoader {
         Object.entries(EYE_SHAPES_CONFIG).forEach(([key, resource]) => {
             this.resources.set(key, resource)
         })
+        // 追加頭部資源鍵值 'head'
+        this.resources.set('head', HEAD_RESOURCE)
     }
 
     public static getInstance(): SVGLoader {
