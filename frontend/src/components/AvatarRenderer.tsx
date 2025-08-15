@@ -399,9 +399,32 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         sprite.scale.set(scale)
     }
 
-    // 更新嘴型紋理
+    // 更新嘴型紋理 - 添加備援機制
     const updateMouthTexture = (mouth: PIXI.Sprite, shape: string) => {
-        const texture = svgLoader.getTexture(shape)
+        let texture = svgLoader.getTexture(shape)
+
+        // 如果特定嘴型載入失敗，使用備援嘴型
+        if (!texture) {
+            console.warn(`嘴型 ${shape} 載入失敗，使用備援嘴型`)
+
+            // 根據嘴型類型選擇最接近的備援
+            if (['A', 'G', 'H'].includes(shape)) {
+                // 張嘴類型使用 soft-smile 作為備援
+                texture = svgLoader.getTexture('soft-smile')
+            } else if (['B', 'C', 'D', 'E', 'F'].includes(shape)) {
+                // 中等張嘴類型使用 soft-smile 作為備援
+                texture = svgLoader.getTexture('soft-smile')
+            } else {
+                // 閉嘴類型使用 X 作為備援
+                texture = svgLoader.getTexture('X')
+            }
+
+            // 如果備援也失敗，使用預設
+            if (!texture) {
+                texture = svgLoader.getTexture('soft-smile')
+            }
+        }
+
         if (texture) {
             mouth.texture = texture
         }
@@ -442,6 +465,18 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 const states = ['normal', 'look-left', 'look-right']
                 const next = states[Math.floor(Math.random() * states.length)]
                 updateEyeTexture(eye, next)
+            }
+
+            // 確保嘴型在閒置時保持自然狀態
+            if (avatarRef.current!.mouth && avatarRef.current!.currentMouthShape !== 'X') {
+                const mouth = avatarRef.current!.mouth as PIXI.Sprite
+                // 如果嘴型不是閉嘴狀態，重置到閉嘴
+                if (mouth.scale.x !== 0.95) {
+                    mouth.scale.set(0.95, 0.95)
+                }
+                updateMouthTexture(mouth, 'X')
+                avatarRef.current!.currentMouthShape = 'X'
+                setCurrentMouthShape('X')
             }
 
             // 每幀校正位置（以幾何中心精準對齊）
@@ -539,6 +574,18 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                     console.log('停止音訊播放')
                     audioRef.current.pause()
                 }
+
+                // 重置嘴型到自然狀態
+                if (avatarRef.current?.mouth) {
+                    const mouth = avatarRef.current.mouth as PIXI.Sprite
+                    // 平滑過渡到閉嘴狀態
+                    animateMouthShape(mouth, 0.95, 300)
+                    // 更新紋理到閉嘴狀態
+                    updateMouthTexture(mouth, 'X')
+                    avatarRef.current.currentMouthShape = 'X'
+                    setCurrentMouthShape('X')
+                }
+
                 startIdleAnimation()
             }
         }
@@ -557,37 +604,57 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         if (currentShape && currentShape.shape !== avatarRef.current.currentMouthShape) {
             // 更新嘴型狀態
             const newShape = currentShape.shape
+            const oldShape = avatarRef.current.currentMouthShape
             avatarRef.current.currentMouthShape = newShape
             setCurrentMouthShape(newShape)
 
             // 更新嘴型紋理
             updateMouthTexture(mouth, newShape)
 
-            // 使用動畫服務執行平滑的嘴型切換
+            // 計算目標縮放值
             const targetScale = getMouthScale(newShape)
-            mouthAnimationService.animateMouthShape(mouth, targetScale, 150)
 
-            // 為某些嘴型添加震動效果（強調發音）
+            // 根據嘴型變化程度調整動畫時長
+            let animationDuration = 150
+            if (oldShape && newShape) {
+                const oldScale = getMouthScale(oldShape)
+                const scaleDiff = Math.abs(targetScale - oldScale)
+                // 縮放差異越大，動畫時長越短（更快速）
+                animationDuration = Math.max(100, 200 - scaleDiff * 100)
+            }
+
+            // 執行平滑的嘴型切換動畫
+            animateMouthShape(mouth, targetScale, animationDuration)
+
+            // 為強調發音的嘴型添加震動效果
             if (['A', 'G', 'H'].includes(newShape)) {
                 setTimeout(() => {
-                    mouthAnimationService.animateMouthVibration(mouth, 0.08, 150)
+                    animateMouthVibration(mouth, 0.08, 150)
                 }, 100)
+            }
+
+            // 為閉嘴狀態添加特殊處理
+            if (newShape === 'X') {
+                // 閉嘴時稍微縮小，更自然
+                setTimeout(() => {
+                    mouth.scale.set(0.95, 0.95)
+                }, 50)
             }
         }
     }
 
-    // 獲取嘴型縮放值
+    // 獲取嘴型縮放值 - 優化為更自然的縮放範圍
     const getMouthScale = (shape: string): number => {
         const shapeMap: { [key: string]: number } = {
-            'X': 1.0,  // 閉嘴
-            'A': 1.0,  // 張嘴
-            'B': 1.0,  // 半張嘴
-            'C': 1.0,  // 小張嘴
-            'D': 1.0, // 微張嘴
-            'E': 1.0,  // 幾乎閉嘴
-            'F': 1.0, // 中等張嘴
-            'G': 1.0, // 大張嘴
-            'H': 1.0  // 最大張嘴
+            'X': 0.95,  // 閉嘴 - 稍微縮小，更自然
+            'A': 1.05,  // 張嘴 - 輕微放大
+            'B': 1.02,  // 半張嘴 - 極微放大
+            'C': 1.01,  // 小張嘴 - 幾乎不變
+            'D': 1.0,   // 微張嘴 - 不變
+            'E': 0.98,  // 幾乎閉嘴 - 輕微縮小
+            'F': 1.03,  // 中等張嘴 - 微放大
+            'G': 1.08,  // 大張嘴 - 適度放大
+            'H': 1.12   // 最大張嘴 - 適度放大（避免過度變形）
         }
         return shapeMap[shape] || 1.0
     }
@@ -600,25 +667,63 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         )
 
         if (currentMovement) {
-            switch (currentMovement.type) {
-                case 'nod':
-                    // 使用動畫服務執行點頭
-                    headAnimationService.animateNod(
-                        avatarRef.current,
-                        currentMovement.intensity * 0.1,
-                        1000
-                    )
-                    break
-                case 'shake':
-                    // 使用動畫服務執行搖頭
-                    headAnimationService.animateShake(
-                        avatarRef.current,
-                        currentMovement.intensity * 0.05,
-                        800
-                    )
-                    break
+            // 執行頭部動作
+            const avatar = avatarRef.current
+            const intensity = currentMovement.intensity || 0.1
+
+            if (currentMovement.type === 'nod') {
+                // 點頭動作
+                const nodOffset = Math.sin(currentTime * 10) * intensity * 10
+                avatar.y = 150 + nodOffset
             }
         }
+    }
+
+    // 平滑嘴型切換動畫
+    const animateMouthShape = (mouth: PIXI.Sprite, targetScale: number, duration: number) => {
+        const startScale = mouth.scale.x
+        const scaleDiff = targetScale - startScale
+        const startTime = Date.now()
+
+        const animate = () => {
+            const elapsed = Date.now() - startTime
+            const progress = Math.min(elapsed / duration, 1)
+
+            // 使用 easeOutQuad 緩動函數
+            const easeProgress = 1 - (1 - progress) * (1 - progress)
+            const currentScale = startScale + scaleDiff * easeProgress
+
+            mouth.scale.set(currentScale, currentScale)
+
+            if (progress < 1) {
+                requestAnimationFrame(animate)
+            }
+        }
+
+        animate()
+    }
+
+    // 嘴型震動效果
+    const animateMouthVibration = (mouth: PIXI.Sprite, intensity: number, duration: number) => {
+        const startTime = Date.now()
+        const originalScale = mouth.scale.x
+
+        const animate = () => {
+            const elapsed = Date.now() - startTime
+            const progress = elapsed / duration
+
+            if (progress < 1) {
+                const vibration = Math.sin(elapsed * 0.02) * intensity
+                const currentScale = originalScale + vibration
+                mouth.scale.set(currentScale, currentScale)
+                requestAnimationFrame(animate)
+            } else {
+                // 恢復原始縮放
+                mouth.scale.set(originalScale, originalScale)
+            }
+        }
+
+        animate()
     }
 
     return (

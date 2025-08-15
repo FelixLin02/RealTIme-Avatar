@@ -19,20 +19,23 @@ export interface SVGResource {
     loaded: boolean
 }
 
-// 嘴型資源配置（優先使用 mouth-shapes，更豐富；X 保留 variants 的 closed）
+// 嘴型資源配置（只使用實際存在的SVG檔案）
 export const MOUTH_SHAPES_CONFIG: { [key: string]: SVGResource } = {
-    // 以提供的新素材為主：預設展示 soft-smile
+    // 預設展示 soft-smile
     'soft-smile': { id: 'soft-smile', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    // 其他鍵保留，必要時可映射到最接近的形狀
-    'X': { id: 'soft-smile-as-X', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    'A': { id: 'soft-smile-as-A', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    'B': { id: 'soft-smile-as-B', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    'C': { id: 'soft-smile-as-C', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    'D': { id: 'soft-smile-as-D', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    'E': { id: 'soft-smile-as-E', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    'F': { id: 'soft-smile-as-F', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    'G': { id: 'soft-smile-as-G', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    'H': { id: 'soft-smile-as-H', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false }
+    // 閉嘴狀態
+    'X': { id: 'mouth-closed', path: '../assets/mouth-shapes/Avatar-mouth-closed.svg', loaded: false },
+    // 張嘴狀態 - 使用實際存在的SVG
+    'A': { id: 'mouth-A', path: '../assets/mouth-shapes/Avatar-mouth-A.svg', loaded: false },
+    'B': { id: 'mouth-B', path: '../assets/mouth-shapes/Avatar-mouth-soft-smile.svg', loaded: false }, // 備援
+    'C': { id: 'mouth-C', path: '../assets/mouth-shapes/Avatar-mouth-soft-smile.svg', loaded: false }, // 備援
+    'D': { id: 'mouth-D', path: '../assets/mouth-shapes/Avatar-mouth-soft-smile.svg', loaded: false }, // 備援
+    'E': { id: 'mouth-E', path: '../assets/mouth-shapes/Avatar-mouth-E.svg', loaded: false },
+    'F': { id: 'mouth-F', path: '../assets/mouth-shapes/Avatar-mouth-soft-smile.svg', loaded: false }, // 備援
+    'G': { id: 'mouth-G', path: '../assets/mouth-shapes/Avatar-mouth-big-smile.svg', loaded: false }, // 大張嘴
+    'H': { id: 'mouth-H', path: '../assets/mouth-shapes/Avatar-mouth-O.svg', loaded: false }, // 最大張嘴
+    'O': { id: 'mouth-O', path: '../assets/mouth-shapes/Avatar-mouth-O.svg', loaded: false }, // 圓形張嘴
+    'tight': { id: 'mouth-tight', path: '../assets/mouth-shapes/Avatar-mouth-tight.svg', loaded: false } // 緊閉嘴
 }
 
 // 眉毛資源配置
