@@ -35,6 +35,13 @@ export const MOUTH_SHAPES_CONFIG: { [key: string]: SVGResource } = {
     'H': { id: 'soft-smile-as-H', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false }
 }
 
+// 眉毛資源配置
+export const EYEBROW_RESOURCE: SVGResource = {
+    id: 'eye-brow',
+    path: '../assets/eyes/Avatar-eye-brow.svg',
+    loaded: false
+}
+
 // 眼睛資源配置
 export const EYE_SHAPES_CONFIG: { [key: string]: SVGResource } = {
     'normal': { id: 'eyes-open', path: '../assets/eyes/Avatar-eyes-open.svg', loaded: false },
@@ -64,6 +71,8 @@ export class SVGLoader {
         Object.entries(EYE_SHAPES_CONFIG).forEach(([key, resource]) => {
             this.resources.set(key, resource)
         })
+        // 追加眉毛資源
+        this.resources.set('eye-brow', EYEBROW_RESOURCE)
         // 追加頭部資源鍵值 'head'
         this.resources.set('head', HEAD_RESOURCE)
     }

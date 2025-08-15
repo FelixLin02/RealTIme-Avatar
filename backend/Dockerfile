@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libasound2-dev \
     libboost-all-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # 安裝較新版 CMake（解決 CMP0167 等政策問題）
@@ -26,6 +27,7 @@ RUN git clone https://github.com/DanielSWolf/rhubarb-lip-sync.git /tmp/rhubarb \
     && /usr/local/bin/cmake .. \
     && /usr/local/bin/cmake --build . --target rhubarb -j"$(nproc)" \
     && find . -maxdepth 5 -type f -name rhubarb -exec cp {} /usr/local/bin/ \; \
+    && cp -r /tmp/rhubarb/build/rhubarb/res /usr/local/bin/ \
     && cd / \
     && rm -rf /tmp/rhubarb
 

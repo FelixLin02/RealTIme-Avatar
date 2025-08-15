@@ -264,12 +264,18 @@ export class HeadAnimationService {
         return HeadAnimationService.instance
     }
 
-    // 執行點頭動畫
+    // 執行點頭動畫 - 已註解，避免畫面傾斜
     public animateNod(
         head: PIXI.Container,
         intensity: number = 0.1,
         duration: number = 1000
     ): void {
+        // 註解點頭動畫，避免畫面傾斜
+        console.log('點頭動畫已停用，避免畫面傾斜')
+        return
+
+        // 原始代碼已註解
+        /*
         if (this.currentAnimation) {
             this.currentAnimation.stop()
         }
@@ -290,14 +296,21 @@ export class HeadAnimationService {
         })
 
         this.currentAnimation.start()
+        */
     }
 
-    // 執行搖頭動畫
+    // 執行搖頭動畫 - 已註解，避免畫面傾斜
     public animateShake(
         head: PIXI.Container,
         intensity: number = 0.05,
         duration: number = 800
     ): void {
+        // 註解搖頭動畫，避免畫面傾斜
+        console.log('搖頭動畫已停用，避免畫面傾斜')
+        return
+
+        // 原始代碼已註解
+        /*
         if (this.currentAnimation) {
             this.currentAnimation.stop()
         }
@@ -308,7 +321,7 @@ export class HeadAnimationService {
             duration,
             easing: 'easeOutElastic',
             onUpdate: (progress) => {
-                const shakeValue = Math.sin(progress * Math.PI * 4) * intensity * (1 - progress)
+                const shakeValue = Math.sin(progress * Math.PI * 2) * intensity
                 head.rotation = originalRotation + shakeValue
             },
             onComplete: () => {
@@ -318,6 +331,7 @@ export class HeadAnimationService {
         })
 
         this.currentAnimation.start()
+        */
     }
 }
 

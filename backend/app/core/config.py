@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     BACKEND_PUBLIC_URL: str = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8000")
 
     # Rhubarb Lip Sync 配置
-    RHUBARB_PATH: str = os.getenv("RHUBARB_PATH", "rhubarb")  # 命令列工具路徑
+    RHUBARB_PATH: str = os.getenv("RHUBARB_PATH", "/usr/local/bin/rhubarb")  # 命令列工具路徑
 
     class Config:
         env_file = ".env"

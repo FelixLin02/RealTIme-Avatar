@@ -17,6 +17,7 @@ const DEBUG_OFFSET_Y = 0
 interface AvatarContainer extends PIXI.Container {
     mouth: PIXI.Sprite
     eyes: PIXI.Sprite[]
+    eyebrows: PIXI.Sprite
     currentMouthShape: string
     currentEyeState: string
 }
@@ -222,6 +223,11 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 .then(() => {
                     if (!avatarRef.current) return
                     // 套用最新紋理（此時一定要拿真實紋理）
+                    const eyebrowsTex2 = svgLoader.getTexture('eye-brow')
+                    if (eyebrowsTex2) {
+                        avatarRef.current.eyebrows.texture = eyebrowsTex2
+                        Object.assign(avatarRef.current.eyebrows, { visible: true, width: 300, height: 300, x: 0, y: 0 })
+                    }
                     const mTex2 = svgLoader.getTexture('soft-smile') || svgLoader.getTexture('X')
                     if (mTex2) {
                         avatarRef.current.mouth.texture = mTex2
@@ -339,6 +345,18 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             container.addChild(head)
         }
 
+        // 眉毛：300x300 全畫布貼圖，與 Avatar-Base.svg 對位
+        const eyebrows = new PIXI.Sprite()
+        eyebrows.anchor.set(0.5)
+        const eyebrowsTex = svgLoader.getTexture('eye-brow')
+        if (eyebrowsTex) eyebrows.texture = eyebrowsTex
+        eyebrows.visible = Boolean(eyebrowsTex)
+        eyebrows.x = 0
+        eyebrows.y = 0
+        eyebrows.width = 300
+        eyebrows.height = 300
+        container.addChild(eyebrows)
+
         // 眼睛改為「單一 300x300 全畫布」的貼圖，與 Avatar-Base.svg 對位
         const eyesSprite = new PIXI.Sprite()
         eyesSprite.anchor.set(0.5)
@@ -366,6 +384,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         // 儲存參考以便後續動畫
         container.mouth = mouth
         container.eyes = [eyesSprite]
+        container.eyebrows = eyebrows
         container.currentMouthShape = 'X'
         container.currentEyeState = 'normal'
     }
@@ -405,9 +424,11 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             time += 0.016 // 約 60fps
             gazeTimer += 0.016
 
-            // 呼吸動畫
-            const breathScale = 1 + Math.sin(time * 0.5) * 0.02
-            avatarRef.current!.scale.set(breathScale)
+            // 呼吸動畫 - 已註解，保持固定大小
+            // const breathScale = 1 + Math.sin(time * 0.5) * 0.02
+            // avatarRef.current!.scale.set(breathScale)
+            // 固定縮放比例為 1.0，避免縮放感
+            avatarRef.current!.scale.set(1.0)
 
             // 眨眼動畫
             if (Math.random() < 0.008) { // 降低眨眼頻率，更自然
@@ -428,6 +449,8 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             const avatar = avatarRef.current
             if (app && avatar) {
                 centerAvatarByPivot(app, avatar)
+                // 確保動畫過程中維持 300x300 比例
+                avatar.scale.set(1.0)
             }
 
             animationRef.current = requestAnimationFrame(animate)
@@ -530,17 +553,17 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
     // 獲取嘴型縮放值
     const getMouthScale = (shape: string): number => {
         const shapeMap: { [key: string]: number } = {
-            'X': 0.8,  // 閉嘴
-            'A': 1.2,  // 張嘴
-            'B': 1.1,  // 半張嘴
+            'X': 1.0,  // 閉嘴
+            'A': 1.0,  // 張嘴
+            'B': 1.0,  // 半張嘴
             'C': 1.0,  // 小張嘴
-            'D': 0.95, // 微張嘴
-            'E': 0.9,  // 幾乎閉嘴
-            'F': 1.05, // 中等張嘴
-            'G': 1.15, // 大張嘴
-            'H': 1.25  // 最大張嘴
+            'D': 1.0, // 微張嘴
+            'E': 1.0,  // 幾乎閉嘴
+            'F': 1.0, // 中等張嘴
+            'G': 1.0, // 大張嘴
+            'H': 1.0  // 最大張嘴
         }
-        return shapeMap[shape] || 0.8
+        return shapeMap[shape] || 1.0
     }
 
     const updateHeadMovement = (headMovements: any[], currentTime: number) => {
