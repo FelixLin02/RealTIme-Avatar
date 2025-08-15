@@ -125,10 +125,13 @@ class AvatarService:
             # 執行 Rhubarb Lip Sync 命令（使用 phonetic 模式，不需要字典檔案）
             rhubarb_cmd = [
                 self.rhubarb_path,
-                "-r", "phonetic",  # 使用音素模式，不需要字典檔案
+                "-r",
+                "phonetic",  # 使用音素模式，不需要字典檔案
                 audio_file_path,  # 音訊檔案
-                "-f", "json",
-                "-o", output_json_path,
+                "-f",
+                "json",
+                "-o",
+                output_json_path,
             ]
 
             print(f"執行 Rhubarb 命令: {' '.join(rhubarb_cmd)}")
@@ -182,9 +185,9 @@ class AvatarService:
                 end_time = cue.get("end", 0)
                 mouth_shape = cue.get("value", "X")  # X, A, B, C, D, E, F, G, H, X
 
-                # 轉換為秒（Rhubarb 輸出是毫秒）
-                start_seconds = start_time / 1000.0
-                end_seconds = end_time / 1000.0
+                # Rhubarb 輸出已經是秒，不需要轉換
+                start_seconds = start_time
+                end_seconds = end_time
 
                 animation_script["mouth_shapes"].append(
                     {"start": start_seconds, "end": end_seconds, "shape": mouth_shape}
@@ -192,11 +195,11 @@ class AvatarService:
 
                 total_duration = max(total_duration, end_time)
 
-            # 轉換總時長為秒
-            animation_script["duration"] = total_duration / 1000.0
+            # 總時長已經是秒
+            animation_script["duration"] = total_duration
 
             # 添加簡單的頭部動作（可選）
-            # 傳入毫秒值，讓 _generate_head_movements 內部處理轉換
+            # total_duration 現在已經是秒，直接傳入
             animation_script["head_movements"] = self._generate_head_movements(
                 total_duration
             )
@@ -213,8 +216,8 @@ class AvatarService:
         movements = []
         interval = 2.0  # 每2秒一個動作
 
-        # duration 已經是毫秒，需要轉換為秒
-        duration_seconds = duration / 1000.0
+        # duration 現在已經是秒，直接使用
+        duration_seconds = duration
 
         for i in range(0, int(duration_seconds), int(interval)):
             movements.append(

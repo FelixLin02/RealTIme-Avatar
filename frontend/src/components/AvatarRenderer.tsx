@@ -478,21 +478,41 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             cancelAnimationFrame(animationRef.current)
         }
 
+        // 清理之前的音訊
+        if (audioRef.current) {
+            audioRef.current.pause()
+            audioRef.current = null
+        }
+
+        console.log('開始動畫，時長:', script.duration, '音訊URL:', audioUrl)
+
         // 播放音訊（若提供）
         if (audioUrl) {
             const audio = new Audio()
                 // 允許跨來源播放，避免某些瀏覽器的限制
                 ; (audio as any).crossOrigin = 'anonymous'
                 ; (audio as any).playsInline = true
+
+            // 先載入音訊，再播放
+            audio.addEventListener('canplaythrough', () => {
+                console.log('音訊可播放，開始播放')
+                audio.play().catch((err) => {
+                    console.warn('音訊播放被阻擋或失敗，將僅顯示嘴型動畫。', err)
+                    // 即使音訊播放失敗，仍然繼續動畫
+                })
+            })
+
+            audio.addEventListener('error', (e) => {
+                console.warn('音訊資源載入失敗：', audio.error, e)
+                // 音訊載入失敗時，仍然繼續動畫
+            })
+
+            audio.addEventListener('ended', () => {
+                console.log('音訊播放結束')
+            })
+
             audio.src = audioUrl
             audioRef.current = audio
-            // 盡量在使用者互動後觸發的同一循環內播放；若被瀏覽器阻擋，記錄原因
-            audio.play().catch((err) => {
-                console.warn('音訊播放被阻擋或失敗，將僅顯示嘴型動畫。', err)
-            })
-            audio.addEventListener('error', () => {
-                console.warn('音訊資源載入失敗：', audio.error)
-            })
         }
 
         // 開始說話動畫
@@ -506,11 +526,17 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             // 更新頭部動作
             updateHeadMovement(script.head_movements, currentTime)
 
-            if (currentTime < script.duration) {
+            // 根據音訊和動畫時長決定何時結束
+            const shouldContinue = currentTime < script.duration ||
+                (audioRef.current && !audioRef.current.ended && !audioRef.current.paused)
+
+            if (shouldContinue) {
                 animationRef.current = requestAnimationFrame(animate)
             } else {
+                console.log('動畫結束，當前時間:', currentTime, '動畫時長:', script.duration)
                 // 動畫結束，回到閒置狀態
-                if (audioRef.current) {
+                if (audioRef.current && !audioRef.current.ended) {
+                    console.log('停止音訊播放')
                     audioRef.current.pause()
                 }
                 startIdleAnimation()
