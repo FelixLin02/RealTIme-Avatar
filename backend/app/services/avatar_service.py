@@ -6,6 +6,7 @@ import subprocess
 from typing import Dict, Any
 import edge_tts
 import openai
+from gtts import gTTS
 from app.core.config import settings
 
 
@@ -48,27 +49,131 @@ class AvatarService:
 
     async def text_to_speech(self, text: str) -> str:
         """
-        使用 Edge TTS 將文字轉換為語音
+        使用 Edge TTS 將文字轉換為語音，失敗時自動切換到離線 TTS
         回傳本地音訊檔案路徑
         """
+        # 首先嘗試 Edge TTS
         try:
+            print("嘗試使用 Edge TTS...")
+            return await self._edge_tts(text)
+        except Exception as e:
+            print(f"Edge TTS 失敗: {str(e)}")
+            print("切換到離線 TTS 備援...")
+
+            # 使用離線 TTS 備援
+            try:
+                return await self._offline_tts(text)
+            except Exception as offline_error:
+                print(f"離線 TTS 也失敗: {str(offline_error)}")
+                raise Exception(
+                    f"所有 TTS 服務都失敗: Edge TTS ({str(e)}), 離線 TTS ({str(offline_error)})"
+                )
+
+    async def _edge_tts(self, text: str) -> str:
+        """使用 Edge TTS 生成語音"""
+        max_retries = 3
+        retry_delay = 2  # 初始延遲秒數
+
+        for attempt in range(max_retries):
+            try:
+                print(f"Edge TTS 嘗試 {attempt + 1}/{max_retries}")
+
+                # 建立臨時檔案
+                with tempfile.NamedTemporaryFile(
+                    suffix=".wav", delete=False
+                ) as temp_file:
+                    temp_path = temp_file.name
+
+                # 使用 Edge TTS 生成語音（預設是 MP3 格式，即使副檔名是 .wav）
+                communicate = edge_tts.Communicate(text, self.tts_voice)
+                await communicate.save(temp_path)
+
+                # 驗證生成的檔案是否為有效
+                if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+                    raise Exception("生成的音訊檔案無效或為空")
+
+                print(
+                    f"Edge TTS 音訊檔案已生成: {temp_path}, 大小: {os.path.getsize(temp_path)} bytes"
+                )
+
+                # 使用 FFmpeg 轉換為真正的 WAVE 格式（Rhubarb 需要）
+                wave_path = temp_path.replace(".wav", "_wave.wav")
+                ffmpeg_cmd = [
+                    "ffmpeg",
+                    "-i",
+                    temp_path,
+                    "-acodec",
+                    "pcm_s16le",
+                    "-ar",
+                    "22050",
+                    "-ac",
+                    "1",
+                    wave_path,
+                    "-y",
+                ]
+
+                print(f"執行 FFmpeg 轉換命令: {' '.join(ffmpeg_cmd)}")
+                result = subprocess.run(
+                    ffmpeg_cmd, capture_output=True, text=True, timeout=30
+                )
+
+                if result.returncode != 0:
+                    print(f"FFmpeg 錯誤輸出: {result.stderr}")
+                    raise Exception(f"FFmpeg 轉換失敗: {result.stderr}")
+
+                # 清理原始檔案
+                os.unlink(temp_path)
+
+                print(f"已轉換為 WAVE 格式: {wave_path}")
+                return wave_path
+
+            except Exception as e:
+                print(f"Edge TTS 嘗試 {attempt + 1} 失敗: {str(e)}")
+                print(f"錯誤類型: {type(e).__name__}")
+
+                # 清理臨時檔案
+                if "temp_path" in locals() and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+
+                # 如果不是最後一次嘗試，等待後重試
+                if attempt < max_retries - 1:
+                    print(f"等待 {retry_delay} 秒後重試...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # 指數退避
+                else:
+                    # 最後一次嘗試失敗，拋出錯誤
+                    print(f"所有 Edge TTS 嘗試都失敗了")
+                    raise Exception(
+                        f"Edge TTS 失敗（已重試 {max_retries} 次）: {str(e)}"
+                    )
+
+    async def _offline_tts(self, text: str) -> str:
+        """使用 gTTS 作為備援 TTS 生成語音"""
+        try:
+            print("使用 gTTS 作為備援 TTS...")
+
             # 建立臨時檔案
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
                 temp_path = temp_file.name
 
-            # 使用 Edge TTS 生成語音（預設是 MP3 格式，即使副檔名是 .wav）
-            communicate = edge_tts.Communicate(text, self.tts_voice)
-            await communicate.save(temp_path)
+            # 使用 gTTS 生成繁體中文語音
+            tts = gTTS(text=text, lang="zh-tw", slow=False)
 
-            # 驗證生成的檔案是否為有效
+            # 生成音檔
+            tts.save(temp_path)
+
+            # 驗證生成的檔案
             if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
-                raise Exception("生成的音訊檔案無效或為空")
+                raise Exception("離線 TTS 生成的音訊檔案無效或為空")
 
             print(
-                f"音訊檔案已生成: {temp_path}, 大小: {os.path.getsize(temp_path)} bytes"
+                f"gTTS 音訊檔案已生成: {temp_path}, 大小: {os.path.getsize(temp_path)} bytes"
             )
 
-            # 使用 FFmpeg 轉換為真正的 WAVE 格式（Rhubarb 需要）
+            # 使用 FFmpeg 轉換為 Rhubarb 需要的格式
             wave_path = temp_path.replace(".wav", "_wave.wav")
             ffmpeg_cmd = [
                 "ffmpeg",
@@ -96,13 +201,13 @@ class AvatarService:
             # 清理原始檔案
             os.unlink(temp_path)
 
-            print(f"已轉換為 WAVE 格式: {wave_path}")
+            print(f"gTTS 已轉換為 WAVE 格式: {wave_path}")
             return wave_path
 
         except Exception as e:
-            print(f"文字轉語音時發生錯誤: {str(e)}")  # 添加日誌
-            print(f"錯誤類型: {type(e).__name__}")  # 添加錯誤類型
-            raise Exception(f"文字轉語音時發生錯誤: {str(e)}")
+            print(f"gTTS 失敗: {str(e)}")
+            print(f"錯誤類型: {type(e).__name__}")
+            raise Exception(f"gTTS 失敗: {str(e)}")
 
     async def analyze_audio(self, audio_file_path: str) -> Dict[str, Any]:
         """

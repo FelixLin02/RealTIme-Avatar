@@ -42,7 +42,38 @@ export class AvatarService {
             return response.data
         } catch (error) {
             console.error('API 請求失敗:', error)
-            throw new Error('發送訊息失敗，請稍後再試')
+
+            // 根據錯誤類型提供更詳細的錯誤訊息
+            if (axios.isAxiosError(error)) {
+                if (error.response) {
+                    // 伺服器回應了錯誤狀態碼
+                    const status = error.response.status
+                    const data = error.response.data
+
+                    if (status === 500) {
+                        // 後端內部錯誤，通常是 TTS 服務問題
+                        throw new Error('語音服務暫時無法使用，請稍後再試（錯誤代碼：500）')
+                    } else if (status === 404) {
+                        // API 端點不存在
+                        throw new Error('服務端點不存在，請檢查網路連線（錯誤代碼：404）')
+                    } else if (status === 403) {
+                        // 權限不足
+                        throw new Error('權限不足，請檢查 API 金鑰設定（錯誤代碼：403）')
+                    } else {
+                        // 其他 HTTP 錯誤
+                        throw new Error(`伺服器錯誤：${data?.detail || data?.message || '未知錯誤'}（錯誤代碼：${status}）`)
+                    }
+                } else if (error.request) {
+                    // 請求已發送但沒有收到回應
+                    throw new Error('無法連接到伺服器，請檢查網路連線')
+                } else {
+                    // 請求設定錯誤
+                    throw new Error('請求設定錯誤，請稍後再試')
+                }
+            } else {
+                // 非 Axios 錯誤
+                throw new Error('發送訊息失敗，請稍後再試')
+            }
         }
     }
 

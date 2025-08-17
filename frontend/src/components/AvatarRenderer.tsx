@@ -194,6 +194,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                 ; (window as any).__avatar = avatar
 
             // 開始閒置動畫並快速結束載入畫面
+
             startIdleAnimation()
             setLoadingStatus('success')
             setTimeout(() => setIsLoading(false), 300)
@@ -291,7 +292,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             clearInterval(progressInterval)
             setLoadingProgress(1)
 
-            console.log('SVG 資源預載入完成')
+
         } catch (error) {
             console.warn('SVG 資源載入失敗:', error)
             throw error
@@ -385,7 +386,8 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         container.mouth = mouth
         container.eyes = [eyesSprite]
         container.eyebrows = eyebrows
-        container.currentMouthShape = 'X'
+        // 根據實際載入的紋理設置初始狀態
+        container.currentMouthShape = mTex === svgLoader.getTexture('soft-smile') ? 'soft-smile' : 'X'
         container.currentEyeState = 'normal'
     }
 
@@ -403,20 +405,18 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
     const updateMouthTexture = (mouth: PIXI.Sprite, shape: string) => {
         let texture = svgLoader.getTexture(shape)
 
-        // 如果特定嘴型載入失敗，使用備援嘴型
+        // 如果特定嘴型載入失敗，使用備援嘴型（靜默處理，不顯示警告）
         if (!texture) {
-            console.warn(`嘴型 ${shape} 載入失敗，使用備援嘴型`)
-
             // 根據嘴型類型選擇最接近的備援
-            if (['A', 'G', 'H'].includes(shape)) {
+            if (['mouth-A', 'mouth-E', 'big-smile', 'mouth-O'].includes(shape)) {
                 // 張嘴類型使用 soft-smile 作為備援
                 texture = svgLoader.getTexture('soft-smile')
-            } else if (['B', 'C', 'D', 'E', 'F'].includes(shape)) {
-                // 中等張嘴類型使用 soft-smile 作為備援
+            } else if (['X', 'tight'].includes(shape)) {
+                // 閉嘴類型使用 soft-smile 作為備援
                 texture = svgLoader.getTexture('soft-smile')
             } else {
-                // 閉嘴類型使用 X 作為備援
-                texture = svgLoader.getTexture('X')
+                // 其他類型使用 soft-smile 作為備援
+                texture = svgLoader.getTexture('soft-smile')
             }
 
             // 如果備援也失敗，使用預設
@@ -427,6 +427,8 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
 
         if (texture) {
             mouth.texture = texture
+        } else {
+            // 靜默處理，不顯示警告
         }
     }
 
@@ -441,11 +443,25 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
     const startIdleAnimation = () => {
         if (!avatarRef.current) return
 
+
         let time = 0
         let gazeTimer = 0
+        let mouthTimer = 0
+
+        // 預先計算隨機延遲，避免每幀重新計算
+        let gazeDelay = 2.5 + Math.random() * 1.5
+        let mouthDelay = 3.0 + Math.random() * 2.0
+
+
+
+
+
         const animate = () => {
             time += 0.016 // 約 60fps
             gazeTimer += 0.016
+            mouthTimer += 0.016
+
+
 
             // 呼吸動畫 - 已註解，保持固定大小
             // const breathScale = 1 + Math.sin(time * 0.5) * 0.02
@@ -459,24 +475,30 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             }
 
             // 每 2.5~4 秒隨機換一次眼神方向（left/right/open）
-            if (gazeTimer > 2.5 + Math.random() * 1.5) {
+            if (gazeTimer > gazeDelay) {
                 gazeTimer = 0
+                gazeDelay = 2.5 + Math.random() * 1.5 // 重新計算下次延遲
                 const eye = avatarRef.current!.eyes[0]
                 const states = ['normal', 'look-left', 'look-right']
                 const next = states[Math.floor(Math.random() * states.length)]
                 updateEyeTexture(eye, next)
+                avatarRef.current!.currentEyeState = next
+                setCurrentEyeState(next)
             }
 
-            // 確保嘴型在閒置時保持自然狀態
-            if (avatarRef.current!.mouth && avatarRef.current!.currentMouthShape !== 'X') {
-                const mouth = avatarRef.current!.mouth as PIXI.Sprite
-                // 如果嘴型不是閉嘴狀態，重置到閉嘴
-                if (mouth.scale.x !== 0.95) {
-                    mouth.scale.set(0.95, 0.95)
+            // 每 3~5 秒隨機換一次嘴型（自然表情變化）
+            if (mouthTimer > mouthDelay) {
+                mouthTimer = 0
+                mouthDelay = 3.0 + Math.random() * 2.0 // 重新計算下次延遲
+                const mouth = avatarRef.current!.mouth
+                if (mouth) {
+                    // 閒置時的嘴型選項：包含所有可用的嘴型
+                    const mouthStates = ['soft-smile', 'X', 'tight', 'mouth-A', 'mouth-E', 'big-smile', 'mouth-O']
+                    const nextMouth = mouthStates[Math.floor(Math.random() * mouthStates.length)]
+                    updateMouthTexture(mouth, nextMouth)
+                    avatarRef.current!.currentMouthShape = nextMouth
+                    setCurrentMouthShape(nextMouth)
                 }
-                updateMouthTexture(mouth, 'X')
-                avatarRef.current!.currentMouthShape = 'X'
-                setCurrentMouthShape('X')
             }
 
             // 每幀校正位置（以幾何中心精準對齊）
@@ -575,15 +597,15 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                     audioRef.current.pause()
                 }
 
-                // 重置嘴型到自然狀態
+                // 重置嘴型到自然狀態，但不強制為 'X'，讓閒置動畫的隨機切換生效
                 if (avatarRef.current?.mouth) {
                     const mouth = avatarRef.current.mouth as PIXI.Sprite
-                    // 平滑過渡到閉嘴狀態
+                    // 平滑過渡到自然狀態，但不強制指定嘴型
                     animateMouthShape(mouth, 0.95, 300)
-                    // 更新紋理到閉嘴狀態
-                    updateMouthTexture(mouth, 'X')
-                    avatarRef.current.currentMouthShape = 'X'
-                    setCurrentMouthShape('X')
+                    // 不強制更新紋理，讓閒置動畫的隨機切換邏輯生效
+                    // updateMouthTexture(mouth, 'X')
+                    // avatarRef.current.currentMouthShape = 'X'
+                    // setCurrentMouthShape('X')
                 }
 
                 startIdleAnimation()
@@ -608,7 +630,7 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             avatarRef.current.currentMouthShape = newShape
             setCurrentMouthShape(newShape)
 
-            // 更新嘴型紋理
+            // 更新嘴型紋理（說話過程中不檢查資源存在性）
             updateMouthTexture(mouth, newShape)
 
             // 計算目標縮放值
@@ -626,35 +648,35 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             // 執行平滑的嘴型切換動畫
             animateMouthShape(mouth, targetScale, animationDuration)
 
-            // 為強調發音的嘴型添加震動效果
-            if (['A', 'G', 'H'].includes(newShape)) {
-                setTimeout(() => {
-                    animateMouthVibration(mouth, 0.08, 150)
-                }, 100)
-            }
+            // 測試階段：暫時移除震動效果，排除震動導致的縮放問題
+            // if (['A', 'G', 'H'].includes(newShape)) {
+            //     setTimeout(() => {
+            //         animateMouthVibration(mouth, 0.08, 150)
+            //     }, 100)
+            // }
 
-            // 為閉嘴狀態添加特殊處理
-            if (newShape === 'X') {
-                // 閉嘴時稍微縮小，更自然
-                setTimeout(() => {
-                    mouth.scale.set(0.95, 0.95)
-                }, 50)
-            }
+            // 測試階段：暫時移除閉嘴狀態的特殊處理，統一使用 1.0 縮放
+            // if (newShape === 'X') {
+            //     // 閉嘴時稍微縮小，更自然
+            //     setTimeout(() => {
+            //         mouth.scale.set(0.95, 0.95)
+            //     }, 50)
+            // }
         }
     }
 
-    // 獲取嘴型縮放值 - 優化為更自然的縮放範圍
+    // 獲取嘴型縮放值 - 測試階段：全部設為 1.0
     const getMouthScale = (shape: string): number => {
         const shapeMap: { [key: string]: number } = {
-            'X': 0.95,  // 閉嘴 - 稍微縮小，更自然
-            'A': 1.05,  // 張嘴 - 輕微放大
-            'B': 1.02,  // 半張嘴 - 極微放大
-            'C': 1.01,  // 小張嘴 - 幾乎不變
-            'D': 1.0,   // 微張嘴 - 不變
-            'E': 0.98,  // 幾乎閉嘴 - 輕微縮小
-            'F': 1.03,  // 中等張嘴 - 微放大
-            'G': 1.08,  // 大張嘴 - 適度放大
-            'H': 1.12   // 最大張嘴 - 適度放大（避免過度變形）
+            'X': 1.0,   // 閉嘴 - 測試階段設為 1.0
+            'A': 1.0,   // 張嘴 - 測試階段設為 1.0
+            'B': 1.0,   // 半張嘴 - 測試階段設為 1.0
+            'C': 1.0,   // 小張嘴 - 測試階段設為 1.0
+            'D': 1.0,   // 微張嘴 - 測試階段設為 1.0
+            'E': 1.0,   // 幾乎閉嘴 - 測試階段設為 1.0
+            'F': 1.0,   // 中等張嘴 - 測試階段設為 1.0
+            'G': 1.0,   // 大張嘴 - 測試階段設為 1.0
+            'H': 1.0    // 最大張嘴 - 測試階段設為 1.0
         }
         return shapeMap[shape] || 1.0
     }

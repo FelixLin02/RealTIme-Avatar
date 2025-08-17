@@ -3,12 +3,40 @@ import * as PIXI from 'pixi.js'
 // 以 Vite 的 import.meta.glob 建立資源路徑對映，避免直接 fetch /src 導致 404
 // Key 會是相對於本檔案的路徑，例如 '../assets/mouth-shapes/mouth-close.svg'
 // Value 會是可直接請求的 URL（開發時為本機伺服器 URL，打包時為指向資產的 URL）
+
+// 使用字面量路徑，符合 Vite 的要求
 const ASSET_URL_MAP: Record<string, string> = {
     ...((import.meta as any).glob('../assets/**/*.svg', { eager: true, as: 'url' }) as Record<string, string>)
 }
 
+// 調試：檢查資源載入狀態
+console.log('🔍 ASSET_URL_MAP 內容:', ASSET_URL_MAP)
+console.log('🔍 載入的 SVG 檔案數量:', Object.keys(ASSET_URL_MAP).length)
+console.log('🔍 載入的 SVG 檔案路徑:', Object.keys(ASSET_URL_MAP))
+
+
+
+
+
+
+
 function resolveAssetUrl(relativePathFromHere: string): string | undefined {
-    return ASSET_URL_MAP[relativePathFromHere]
+    // 直接匹配
+    if (ASSET_URL_MAP[relativePathFromHere]) {
+        return ASSET_URL_MAP[relativePathFromHere]
+    }
+
+    // 如果沒有直接匹配，嘗試查找包含檔案名的路徑
+    const fileName = relativePathFromHere.split('/').pop()
+    if (fileName) {
+        for (const [path, url] of Object.entries(ASSET_URL_MAP)) {
+            if (path.includes(fileName)) {
+                return url
+            }
+        }
+    }
+
+    return undefined
 }
 
 // SVG 資源類型定義
@@ -19,23 +47,18 @@ export interface SVGResource {
     loaded: boolean
 }
 
-// 嘴型資源配置（只使用實際存在的SVG檔案）
+// 嘴型資源配置（包含所有可用的SVG檔案）
 export const MOUTH_SHAPES_CONFIG: { [key: string]: SVGResource } = {
-    // 預設展示 soft-smile
+    // 基礎表情
     'soft-smile': { id: 'soft-smile', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
-    // 閉嘴狀態
     'X': { id: 'mouth-closed', path: '../assets/mouth-shapes/Avatar-mouth-closed.svg', loaded: false },
-    // 張嘴狀態 - 使用實際存在的SVG
-    'A': { id: 'mouth-A', path: '../assets/mouth-shapes/Avatar-mouth-A.svg', loaded: false },
-    'B': { id: 'mouth-B', path: '../assets/mouth-shapes/Avatar-mouth-soft-smile.svg', loaded: false }, // 備援
-    'C': { id: 'mouth-C', path: '../assets/mouth-shapes/Avatar-mouth-soft-smile.svg', loaded: false }, // 備援
-    'D': { id: 'mouth-D', path: '../assets/mouth-shapes/Avatar-mouth-soft-smile.svg', loaded: false }, // 備援
-    'E': { id: 'mouth-E', path: '../assets/mouth-shapes/Avatar-mouth-E.svg', loaded: false },
-    'F': { id: 'mouth-F', path: '../assets/mouth-shapes/Avatar-mouth-soft-smile.svg', loaded: false }, // 備援
-    'G': { id: 'mouth-G', path: '../assets/mouth-shapes/Avatar-mouth-big-smile.svg', loaded: false }, // 大張嘴
-    'H': { id: 'mouth-H', path: '../assets/mouth-shapes/Avatar-mouth-O.svg', loaded: false }, // 最大張嘴
-    'O': { id: 'mouth-O', path: '../assets/mouth-shapes/Avatar-mouth-O.svg', loaded: false }, // 圓形張嘴
-    'tight': { id: 'mouth-tight', path: '../assets/mouth-shapes/Avatar-mouth-tight.svg', loaded: false } // 緊閉嘴
+    'tight': { id: 'mouth-tight', path: '../assets/mouth-shapes/Avatar-mouth-tight.svg', loaded: false },
+
+    // 張嘴表情（從小到大）
+    'mouth-A': { id: 'mouth-A', path: '../assets/mouth-shapes/Avatar-mouth-A.svg', loaded: false },
+    'mouth-E': { id: 'mouth-E', path: '../assets/mouth-shapes/Avatar-mouth-E.svg', loaded: false },
+    'big-smile': { id: 'big-smile', path: '../assets/mouth-shapes/Avatar-mouth-big-smile.svg', loaded: false },
+    'mouth-O': { id: 'mouth-O', path: '../assets/mouth-shapes/Avatar-mouth-O.svg', loaded: false }
 }
 
 // 眉毛資源配置
@@ -99,9 +122,12 @@ export class SVGLoader {
 
         try {
             await Promise.all(loadPromises)
-            console.log('所有 SVG 資源載入完成')
+            // 載入完成後顯示最終狀態
+            this.showFinalStatus()
         } catch (error) {
-            console.warn('部分 SVG 資源載入失敗:', error)
+            console.warn('⚠️ 部分 SVG 資源載入失敗:', error)
+            // 即使有錯誤也顯示狀態
+            this.showFinalStatus()
         }
     }
 
@@ -114,9 +140,8 @@ export class SVGLoader {
             const texture = await this.loadSVGAsTexture(resource.path)
             resource.texture = texture
             resource.loaded = true
-            console.log(`資源載入成功: ${key}`)
         } catch (error) {
-            console.error(`資源載入失敗: ${key}`, error)
+            console.error(`❌ 資源載入失敗: ${key} (${resource.path})`, error)
             // 創建備用紋理
             resource.texture = this.createFallbackTexture(key)
             resource.loaded = true
@@ -126,7 +151,21 @@ export class SVGLoader {
     // 獲取資源紋理
     public getTexture(key: string): PIXI.Texture | undefined {
         const resource = this.resources.get(key)
-        if (!resource) return undefined
+
+        if (!resource) {
+            // 測試階段：靜默處理，不顯示警告
+            // console.warn(`⚠️ 資源不存在: ${key}`)
+            return undefined
+        }
+        if (!resource.loaded) {
+            // 移除誤導性警告，因為資源可能正在載入中
+            return undefined
+        }
+        if (!resource.texture) {
+            // 測試階段：靜默處理，不顯示警告
+            // console.warn(`❌ 資源紋理為空: ${key}`)
+            return undefined
+        }
         // 改為僅在真正載入成功時回傳紋理；未載入時不再使用幾何備援，避免出現幾何眼/圓形
         return resource.texture
     }
@@ -135,6 +174,32 @@ export class SVGLoader {
     public isResourceLoaded(key: string): boolean {
         const resource = this.resources.get(key)
         return resource?.loaded || false
+    }
+
+    // 顯示所有資源的最終載入狀態
+    public showFinalStatus(): void {
+        console.log('📊 資源載入最終狀態:')
+
+        const loaded: string[] = []
+        const failed: string[] = []
+
+        for (const [key, resource] of this.resources) {
+            if (resource.loaded && resource.texture) {
+                loaded.push(key)
+            } else {
+                failed.push(key)
+            }
+        }
+
+        if (loaded.length > 0) {
+            console.log(`✅ 已載入 (${loaded.length}):`, loaded.join(', '))
+        }
+
+        if (failed.length > 0) {
+            console.log(`❌ 載入失敗 (${failed.length}):`, failed.join(', '))
+        }
+
+        console.log(`📈 總計: ${this.resources.size} 個資源`)
     }
 
     // 載入 SVG 為 PIXI 紋理
