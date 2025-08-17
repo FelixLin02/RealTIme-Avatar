@@ -49,16 +49,16 @@ export interface SVGResource {
 
 // 嘴型資源配置（包含所有可用的SVG檔案）
 export const MOUTH_SHAPES_CONFIG: { [key: string]: SVGResource } = {
-    // 基礎表情
-    'soft-smile': { id: 'soft-smile', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
+    // 閒置時的嘴型：自然表情
     'X': { id: 'mouth-closed', path: '../assets/mouth-shapes/Avatar-mouth-closed.svg', loaded: false },
     'tight': { id: 'mouth-tight', path: '../assets/mouth-shapes/Avatar-mouth-tight.svg', loaded: false },
+    'soft-smile': { id: 'soft-smile', path: '../assets/Avatar-mouth-soft-smile.svg', loaded: false },
 
-    // 張嘴表情（從小到大）
-    'mouth-A': { id: 'mouth-A', path: '../assets/mouth-shapes/Avatar-mouth-A.svg', loaded: false },
-    'mouth-E': { id: 'mouth-E', path: '../assets/mouth-shapes/Avatar-mouth-E.svg', loaded: false },
-    'big-smile': { id: 'big-smile', path: '../assets/mouth-shapes/Avatar-mouth-big-smile.svg', loaded: false },
-    'mouth-O': { id: 'mouth-O', path: '../assets/mouth-shapes/Avatar-mouth-O.svg', loaded: false }
+    // 說話時的嘴型：Rhubarb 標準名稱（根據實際可用檔案）
+    'A': { id: 'mouth-A', path: '../assets/mouth-shapes/Avatar-mouth-A.svg', loaded: false },
+    'E': { id: 'mouth-E', path: '../assets/mouth-shapes/Avatar-mouth-E.svg', loaded: false },
+    'O': { id: 'mouth-O', path: '../assets/mouth-shapes/Avatar-mouth-O.svg', loaded: false },
+    'big-smile': { id: 'big-smile', path: '../assets/mouth-shapes/Avatar-mouth-big-smile.svg', loaded: false }
 }
 
 // 眉毛資源配置
