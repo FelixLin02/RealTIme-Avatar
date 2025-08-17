@@ -20,6 +20,7 @@ interface AvatarContainer extends PIXI.Container {
     eyebrows: PIXI.Sprite
     currentMouthShape: string
     currentEyeState: string
+    isTalking?: boolean  // 說話動畫標識
 }
 
 interface AnimationScript {
@@ -427,6 +428,11 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
 
         if (texture) {
             mouth.texture = texture
+            // 步驟 4：只在說話動畫中檢查並修正縮放為 0.3（測試是否為正常大小）
+            if (avatarRef.current?.isTalking && (mouth.scale.x !== 0.3 || mouth.scale.y !== 0.3)) {
+                console.log(`🔧 說話動畫中紋理切換後修正縮放: ${mouth.scale.x} → 0.3（測試正常大小）`)
+                mouth.scale.set(0.3, 0.3)
+            }
         } else {
             // 靜默處理，不顯示警告
         }
@@ -466,8 +472,8 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             // 呼吸動畫 - 已註解，保持固定大小
             // const breathScale = 1 + Math.sin(time * 0.5) * 0.02
             // avatarRef.current!.scale.set(breathScale)
-            // 固定縮放比例為 1.0，避免縮放感
-            avatarRef.current!.scale.set(1.0)
+            // 固定縮放比例為 1.0，避免縮放感（但不影響嘴型縮放）
+            // avatarRef.current!.scale.set(1.0)  // 註解掉，避免干擾嘴型縮放
 
             // 眨眼動畫
             if (Math.random() < 0.008) { // 降低眨眼頻率，更自然
@@ -506,8 +512,8 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
             const avatar = avatarRef.current
             if (app && avatar) {
                 centerAvatarByPivot(app, avatar)
-                // 確保動畫過程中維持 300x300 比例
-                avatar.scale.set(1.0)
+                // 確保動畫過程中維持 300x300 比例（但不影響嘴型縮放）
+                // avatar.scale.set(1.0)  // 註解掉，避免干擾嘴型縮放
             }
 
             animationRef.current = requestAnimationFrame(animate)
@@ -529,6 +535,9 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
 
     const startTalkingAnimation = (script: AnimationScript, audioUrl: string) => {
         if (!avatarRef.current) return
+
+        // 設置說話動畫標識
+        avatarRef.current.isTalking = true
 
         // 停止閒置動畫
         if (animationRef.current) {
@@ -597,11 +606,16 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
                     audioRef.current.pause()
                 }
 
-                // 重置嘴型到自然狀態，但不強制為 'X'，讓閒置動畫的隨機切換生效
+                // 重置說話動畫標識
+                if (avatarRef.current) {
+                    avatarRef.current.isTalking = false
+                }
+
+                // 重置嘴型到自然狀態（0.3），但不強制為 'X'，讓閒置動畫的隨機切換生效
                 if (avatarRef.current?.mouth) {
                     const mouth = avatarRef.current.mouth as PIXI.Sprite
-                    // 平滑過渡到自然狀態，但不強制指定嘴型
-                    animateMouthShape(mouth, 0.95, 300)
+                    // 平滑過渡到自然狀態（0.3），但不強制指定嘴型
+                    animateMouthShape(mouth, 0.3, 300)
                     // 不強制更新紋理，讓閒置動畫的隨機切換邏輯生效
                     // updateMouthTexture(mouth, 'X')
                     // avatarRef.current.currentMouthShape = 'X'
@@ -624,6 +638,12 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         )
 
         if (currentShape && currentShape.shape !== avatarRef.current.currentMouthShape) {
+            // 步驟 1：只在說話動畫中強制重置縮放為 0.3（測試是否為正常大小）
+            if (avatarRef.current.isTalking) {
+                mouth.scale.set(0.3, 0.3)
+                console.log(`🔧 說話動畫中強制重置縮放為 0.3（測試正常大小）`)
+            }
+
             // 更新嘴型狀態
             const newShape = currentShape.shape
             const oldShape = avatarRef.current.currentMouthShape
@@ -635,6 +655,10 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
 
             // 計算目標縮放值
             const targetScale = getMouthScale(newShape)
+
+            // 步驟 2：追蹤縮放值變化
+            console.log(`🔄 嘴型切換: ${oldShape} → ${newShape}`)
+            console.log(`📏 縮放變化: 重置為 0.3 → 目標 ${targetScale}`)
 
             // 根據嘴型變化程度調整動畫時長
             let animationDuration = 150
@@ -665,20 +689,20 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
         }
     }
 
-    // 獲取嘴型縮放值 - 測試階段：全部設為 1.0
+    // 獲取嘴型縮放值 - 測試階段：全部設為 0.3（測試是否為正常大小）
     const getMouthScale = (shape: string): number => {
         const shapeMap: { [key: string]: number } = {
-            'X': 1.0,   // 閉嘴 - 測試階段設為 1.0
-            'A': 1.0,   // 張嘴 - 測試階段設為 1.0
-            'B': 1.0,   // 半張嘴 - 測試階段設為 1.0
-            'C': 1.0,   // 小張嘴 - 測試階段設為 1.0
-            'D': 1.0,   // 微張嘴 - 測試階段設為 1.0
-            'E': 1.0,   // 幾乎閉嘴 - 測試階段設為 1.0
-            'F': 1.0,   // 中等張嘴 - 測試階段設為 1.0
-            'G': 1.0,   // 大張嘴 - 測試階段設為 1.0
-            'H': 1.0    // 最大張嘴 - 測試階段設為 1.0
+            'X': 0.3,   // 閉嘴 - 測試階段設為 0.3
+            'A': 0.3,   // 張嘴 - 測試階段設為 0.3
+            'B': 0.3,   // 半張嘴 - 測試階段設為 0.3
+            'C': 0.3,   // 小張嘴 - 測試階段設為 0.3
+            'D': 0.3,   // 微張嘴 - 測試階段設為 0.3
+            'E': 0.3,   // 幾乎閉嘴 - 測試階段設為 0.3
+            'F': 0.3,   // 中等張嘴 - 測試階段設為 0.3
+            'G': 0.3,   // 大張嘴 - 測試階段設為 0.3
+            'H': 0.3    // 最大張嘴 - 測試階段設為 0.3
         }
-        return shapeMap[shape] || 1.0
+        return shapeMap[shape] || 0.3
     }
 
     const updateHeadMovement = (headMovements: any[], currentTime: number) => {
@@ -719,6 +743,12 @@ const AvatarRenderer: React.FC<AvatarRendererProps> = ({
 
             if (progress < 1) {
                 requestAnimationFrame(animate)
+            } else {
+                // 步驟 3：只在說話動畫中強制恢復縮放為 0.3（測試是否為正常大小）
+                if (avatarRef.current?.isTalking) {
+                    mouth.scale.set(0.3, 0.3)
+                    console.log(`✅ 說話動畫完成: 最終縮放強制恢復為 0.3（測試正常大小）`)
+                }
             }
         }
 
